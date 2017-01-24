@@ -1,0 +1,28 @@
+<package>
+  <name>merbots_ibvs_recovery</name>
+  <version>0.0.1</version>
+  <description>Merbots pose recovery after visual servoing got lost</description>
+  <author>Pep Lluis Negre</author>
+  <maintainer email="pl.negre@uib.cat">Pep Lluis Negre</maintainer>
+  <license>BSD</license>
+  <url type="website">https://github.com/srv/merbots_ibvs_recovery</url>
+  <url type="bugtracker">https://github.com/srv/merbots_ibvs_recovery/issues</url>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <build_depend>roscpp</build_depend>
+  <build_depend>auv_msgs</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <build_depend>std_srvs</build_depend>
+  <build_depend>merbots_ibvs</build_depend>
+  <build_depend>message_filters</build_depend>
+  <build_depend>control</build_depend>
+
+  <run_depend>roscpp</run_depend>
+  <run_depend>auv_msgs</run_depend>
+  <run_depend>std_msgs</run_depend>
+  <run_depend>std_srvs</run_depend>
+  <run_depend>merbots_ibvs</run_depend>
+  <run_depend>message_filters</run_depend>
+  <run_depend>control</run_depend>
+</package>

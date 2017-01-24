@@ -1,0 +1,6 @@
+<launch>
+  <node pkg="merbots_ibvs_recovery" type="merbots_ibvs_recovery" name="merbots_ibvs_recovery" output="screen">
+    <remap from="nav_sts" to="/navigation/nav_sts"/>
+    <remap from="ibvs_info" to="/ibvs/ibvs_info"/>
+  </node>
+</launch>
