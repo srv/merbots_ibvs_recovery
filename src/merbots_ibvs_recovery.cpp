@@ -22,7 +22,7 @@
 #include <std_srvs/Empty.h>
 #include <merbots_ibvs/IBVSInfo.h>
 #include <auv_msgs/NavSts.h>
-#include <control/GotoWithYaw.h>
+#include <cola2_msgs/Goto.h>
 
 // Topic sync
 typedef message_filters::sync_policies::ApproximateTime <auv_msgs::NavSts,
@@ -44,17 +44,22 @@ class MerbotsIbvsRecovery {
    */
   void ReadParams() {
     nh_private_.param("srv_name", srv_name_,
-      std::string("/control/goto_holonomic"));
+      std::string("/cola2_control/enable_goto"));
     nh_private_.param("disable_srv_name", disable_srv_name_,
-      std::string("/control/disable_goto"));
+      std::string("/cola2_control/disable_goto"));
     nh_private_.param("filter_size", filter_size_, 10);
     nh_private_.param("max_time_diff", max_time_diff_, 30.0);
     nh_private_.param("min_lost_time", min_lost_time_, 5.0);
-    nh_private_.param("go_to_tolerance", go_to_tolerance_, 40.0);
+    nh_private_.param("go_to_linear_velocity_x", go_to_linear_velocity_x_, 0.1);
+    nh_private_.param("go_to_linear_velocity_y", go_to_linear_velocity_y_, 0.1);
+    nh_private_.param("go_to_linear_velocity_z", go_to_linear_velocity_z_, 0.1);
+    nh_private_.param("go_go_angular_velocity_yaw", go_go_angular_velocity_yaw_, 0.05);
+    nh_private_.param("go_to_position_tolerance", go_to_position_tolerance_, 0.4);
+    nh_private_.param("go_to_orientation_tolerance", go_to_orientation_tolerance_, 0.3);
   }
 
   /**
-   * @brief      Receives syncronized messages of nav_status and ibvs_info
+   * @brief      Receives synchronized messages of nav_status and ibvs_info
    *
    * @param[in]  nav_sts    The navigation status message
    * @param[in]  ibvs_info  The ibvs information message
@@ -92,7 +97,7 @@ class MerbotsIbvsRecovery {
       if (srv_running_) return;
 
       // Call service
-      if (!EnableGoTo())
+      if (!EnableGoTo(nav_sts))
         ROS_ERROR_STREAM("[MerbotsIbvsRecovery]: Impossible to enable " <<
           "go to service!");
     }
@@ -168,9 +173,11 @@ class MerbotsIbvsRecovery {
   /**
    * @brief      Enable go to service
    *
+   * @param[in]  nav_sts  The navigation status
+   *
    * @return     True if service was called successfully, false otherwise
    */
-  bool EnableGoTo() {
+  bool EnableGoTo(const auv_msgs::NavSts::ConstPtr& nav_sts) {
     // Check if service exists
     if (!CheckForService(srv_name_))
       return false;
@@ -186,14 +193,14 @@ class MerbotsIbvsRecovery {
     }
 
     // Compute median positions
-    double north_lat = 0.0;
-    double east_lon = 0.0;
+    double north = 0.0;
+    double east = 0.0;
     double depth = 0.0;
     double yaw = 0.0;
     for (std::vector< std::pair<auv_msgs::NavSts, double> >::iterator it =
       ibvs_poses_.begin(); it != ibvs_poses_.end(); ++it) {
-      north_lat += it->first.global_position.latitude;
-      east_lon += it->first.global_position.longitude;
+      north += it->first.position.north;
+      east += it->first.position.east;
       depth += it->first.position.depth;
       double tmp_yaw = it->first.orientation.yaw;
       tmp_yaw = fmod(tmp_yaw, 2*M_PI);
@@ -202,20 +209,53 @@ class MerbotsIbvsRecovery {
       }
       yaw += tmp_yaw;
     }
-    north_lat = north_lat / ibvs_poses_.size();
-    east_lon = east_lon / ibvs_poses_.size();
+    north = north / ibvs_poses_.size();
+    east = east / ibvs_poses_.size();
     depth = depth / ibvs_poses_.size();
     yaw = yaw / ibvs_poses_.size();
 
+    double curr_north = nav_sts->position.north;
+    double curr_east = nav_sts->position.east;
+    double dist = sqrt((north - curr_north)*(north - curr_north) +
+                       (east - curr_east)*(east - curr_east));
+    if (dist > 5.0) {
+      ROS_WARN_STREAM("[MerbotsIbvsRecovery]: Distance to target too big. " <<
+        "Omitting");
+      return false;
+    }
+    ROS_INFO_STREAM("[MerbotsIbvsRecovery]: Distance to target: " << dist <<
+      "m.");
+
+
     // Call service
     ros::ServiceClient client =
-      nh_.serviceClient<control::GotoWithYaw>(srv_name_);
-    control::GotoWithYaw srv;
-    srv.request.north_lat = north_lat;
-    srv.request.east_lon = east_lon;
-    srv.request.z = depth;
+      nh_.serviceClient<cola2_msgs::Goto>(srv_name_);
+    cola2_msgs::Goto srv;
+    srv.request.reference = cola2_msgs::Goto::Request::REFERENCE_NED;
+    srv.request.position.x = north;
+    srv.request.position.y = east;
+    srv.request.position.z = depth;
+    srv.request.altitude_mode = false;  // depth mode
     srv.request.yaw = yaw;
-    srv.request.tolerance = go_to_tolerance_;
+    srv.request.linear_velocity.x = go_to_linear_velocity_x_;
+    srv.request.linear_velocity.y = go_to_linear_velocity_y_;
+    srv.request.linear_velocity.z = go_to_linear_velocity_z_;
+    srv.request.angular_velocity.roll = 0;
+    srv.request.angular_velocity.pitch = 0;
+    srv.request.angular_velocity.yaw = go_go_angular_velocity_yaw_;
+    srv.request.position_tolerance.x = go_to_position_tolerance_;
+    srv.request.position_tolerance.y = go_to_position_tolerance_;
+    srv.request.position_tolerance.z = go_to_position_tolerance_;
+    srv.request.orientation_tolerance.roll = go_to_orientation_tolerance_;
+    srv.request.orientation_tolerance.pitch = go_to_orientation_tolerance_;
+    srv.request.orientation_tolerance.yaw = go_to_orientation_tolerance_;
+    // HOLONOMIC GOTO:   False,  False,  ?,      True,   True,   ?
+    srv.request.disable_axis.x = false;
+    srv.request.disable_axis.y = false;
+    srv.request.disable_axis.z = false;
+    srv.request.disable_axis.roll = true;
+    srv.request.disable_axis.pitch = true;
+    srv.request.disable_axis.yaw = false;
     if (!client.call(srv)) {
       ROS_ERROR_STREAM("[MerbotsIbvsRecovery]: Failed to call service " <<
         srv_name_);
@@ -254,7 +294,12 @@ class MerbotsIbvsRecovery {
 
   std::string srv_name_;
   std::string disable_srv_name_;
-  double go_to_tolerance_;
+  double go_to_linear_velocity_x_;
+  double go_to_linear_velocity_y_;
+  double go_to_linear_velocity_z_;
+  double go_go_angular_velocity_yaw_;
+  double go_to_position_tolerance_;
+  double go_to_orientation_tolerance_;
   bool srv_running_;
 
   int filter_size_;

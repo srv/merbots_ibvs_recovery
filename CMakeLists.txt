@@ -7,7 +7,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_srvs
   message_filters
   merbots_ibvs
-  control)
+  cola2_msgs)
 
 include(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
