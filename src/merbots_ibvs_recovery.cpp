@@ -252,7 +252,7 @@ class MerbotsIbvsRecovery {
     // HOLONOMIC GOTO:   False,  False,  ?,      True,   True,   ?
     srv.request.disable_axis.x = false;
     srv.request.disable_axis.y = false;
-    srv.request.disable_axis.z = false;
+    srv.request.disable_axis.z = true;
     srv.request.disable_axis.roll = true;
     srv.request.disable_axis.pitch = true;
     srv.request.disable_axis.yaw = false;
